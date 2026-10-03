@@ -1,4 +1,4 @@
-# Evaluation protocol v1
+# Evaluation protocol v1.1
 
 ## Objective
 
@@ -16,7 +16,13 @@ existing renderer snapshot. A new capture includes `visibilityVersion: "dom-v1"`
 each text node's ancestor-aware `visible` boolean, and an `imageHashes` map keyed by slide number.
 Older captures remain readable but return unknown for unmeasured visibility.
 PNG decoding, dimensions, revision consistency, image digests, and frozen packet images are checked.
+The color ban also inspects decoded, opaque PNG pixels, including CSS surfaces absent from
+the native export model. Unused CSS color variables do not create raster violations.
+Transparent pixels require compositing evidence and remain unknown. This audit is specific
+to the declared blanket green ban; it is not a general measure of color harmony.
 Capture changes invalidate an in-progress review.
+Sessions prepared before this raster audit must be prepared again from the existing captures;
+keep old receipts unchanged. Re-preparing review packets is not a design iteration.
 
 ```sh
 npm run build
@@ -48,11 +54,15 @@ authorized reviewer responses. Missing responses remain held rather than mocked 
 - Preserve exact image digests and explicit human feedback. Pending is not positive.
 - Report false acceptance on human-rejected cases, false rejection on human-accepted cases,
   and coverage together. Missing denominators are null, never zero-percent error.
-- Exclude host self-judgments from independent calibration statistics.
+- Exclude host, stale, unbound and duplicated review records from independent calibration statistics.
 - The first collection is descriptive. Calibration requires held-out examples grouped by
   slide/content family; near-identical revisions must not appear on both sides of a split.
 - A high relative preference cannot compensate for missing content or inadequate absolute quality.
 - Missing, invalid, stale, order-sensitive, or abstained judgments do not auto-pass.
+- Both images require every reading answer. An unreadable baseline can still lose to a
+  readable candidate, but omitting baseline answers makes the comparison incomplete.
+- An overall winner must win at least one evaluated axis. An unassessed axis holds the
+  comparison. Mixed tradeoffs remain visible; these checks do not invent numerical weights.
 - Same-render comparisons are not new design iterations. After the iteration budget, stop.
 - Test authored defects with real rendering as well as unit tests. Synthetic outcomes verify
   program behavior, not a model's visual taste or agreement with people.

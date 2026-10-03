@@ -43,7 +43,9 @@ function geometryIssues(snapshot: Snapshot): Issue[] {
 function paletteIssues(snapshot: Snapshot, contract: Contract): Issue[] {
   if (!contract.forbidGreen) return [];
   const paints = [...snapshot.texts.map(t => ({ color: t.color, name: t.name })), ...snapshot.paints.map((p, i) => ({ color: p.color, name: `paint-${i}` })), { color: snapshot.background, name: 'background' }];
-  return paints.filter(p => isGreen(p.color)).map(p => ({ code: 'prohibited-green', target: p.name, detail: p.color }));
+  const issues = paints.filter(p => isGreen(p.color)).map(p => ({ code: 'prohibited-green', target: p.name, detail: p.color }));
+  if (snapshot.rasterAudit && snapshot.rasterAudit.greenPixels > 0) issues.push({ code: 'prohibited-green', target: 'rendered-image', detail: `${snapshot.rasterAudit.greenPixels} visible green pixels in the actual PNG.` });
+  return issues;
 }
 
 export function checkSnapshot(snapshot: Snapshot, contract: Contract): GateResult {
@@ -52,6 +54,7 @@ export function checkSnapshot(snapshot: Snapshot, contract: Contract): GateResul
   if (snapshot.width !== contract.width || snapshot.height !== contract.height) issues.push({ code: 'wrong-canvas', target: 'slide', detail: 'Canvas differs from the contract.' });
   if (snapshot.role !== contract.role) issues.push({ code: 'wrong-role', target: 'slide', detail: 'The contract belongs to another slide role.' });
   const unverified = snapshot.visibilityCoverage === 'legacy' ? ['Ancestor visibility was not measured by this older renderer.'] : [];
+  if (contract.forbidGreen && (!snapshot.rasterAudit || snapshot.rasterAudit.opaquePixels !== snapshot.rasterAudit.totalPixels)) unverified.push('The rendered color audit is missing or contains uncomposited transparent pixels.');
   if (issues.length) return { status: 'fail', issues, unverified };
   return { status: unverified.length ? 'unknown' : 'pass', issues, unverified };
 }

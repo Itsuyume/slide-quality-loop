@@ -1,8 +1,9 @@
-import type { Feedback, Review } from '../domain/review.js';
+import type { Feedback, Packet, Review } from '../domain/review.js';
+import { boundIndependentReviews } from '../domain/review-evidence.js';
 
-export function summarizeCalibration(feedback: Feedback[], reviews: Review[]) {
+export function summarizeCalibration(feedback: Feedback[], reviews: Review[], packets: Packet[]) {
   const known = feedback.filter(f => f.label !== 'pending');
-  const independent = reviews.filter(r => r.reviewer.independent && r.reviewer.authorshipHidden && r.reviewer.origin !== 'host');
+  const independent = boundIndependentReviews(reviews, packets);
   if (new Set(known.map(f => f.imageSha256)).size !== known.length) throw new Error('Feedback must contain one current label per image.');
   const observations = known.map(label => {
     const votes = independent.flatMap(review => (['A', 'B'] as const).filter(side => review.images[side] === label.imageSha256).map(side => review.adequacy[side]));
@@ -13,6 +14,7 @@ export function summarizeCalibration(feedback: Feedback[], reviews: Review[]) {
   const falseAccept = negative.filter(o => o.votes.some(v => v === 'adequate')).length;
   const falseReject = positive.filter(o => o.votes.some(v => v === 'inadequate')).length;
   return {
+    excludedReviewRecords: reviews.length - independent.length,
     evaluatedHumanNegatives: negative.length, evaluatedHumanPositives: positive.length,
     falseAcceptances: falseAccept, falseRejections: falseReject,
     falseAcceptanceRate: negative.length ? falseAccept / negative.length : null,

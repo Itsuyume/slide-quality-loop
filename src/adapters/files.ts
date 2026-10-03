@@ -1,12 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 
 export function digest(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-export async function readChecked<T>(file: string, schema: ZodType<T>): Promise<T> {
+export async function readChecked<T>(file: string, schema: ZodType<T, ZodTypeDef, unknown>): Promise<T> {
   const value: unknown = JSON.parse(await readFile(file, 'utf8'));
   return schema.parse(value);
 }

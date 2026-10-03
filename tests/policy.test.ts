@@ -63,16 +63,55 @@ test('invalid or absent visual regions fail structured response validation', () 
   assert.equal(reviewSchema.safeParse(other).success, false);
 });
 test('negative-only feedback cannot establish preference calibration', () => {
-  const result = summarizeCalibration([{ imageSha256: 'a'.repeat(64), role: 'relationship', label: 'rejected', origin: 'human', evidence: 'User rejected this image.' }], [review(), review(true)]);
+  const result = summarizeCalibration([{ imageSha256: 'a'.repeat(64), role: 'relationship', label: 'rejected', origin: 'human', evidence: 'User rejected this image.' }], [review(), review(true)], evaluation().packets);
   assert.equal(result.falseAcceptances, 1); assert.equal(result.falseRejectionRate, null); assert.equal(result.personalPreferenceCalibrated, false);
 });
 test('always rejecting is exposed by positive-example false rejection', () => {
   const r = review(); r.adequacy.B = 'inadequate';
-  const result = summarizeCalibration([{ imageSha256: 'b'.repeat(64), role: 'relationship', label: 'accepted', origin: 'human', evidence: 'Synthetic accepted unit-test specimen.' }], [r]);
+  const result = summarizeCalibration([{ imageSha256: 'b'.repeat(64), role: 'relationship', label: 'accepted', origin: 'human', evidence: 'Synthetic accepted unit-test specimen.' }], [r], evaluation().packets);
   assert.equal(result.falseRejections, 1); assert.equal(result.falseRejectionRate, 1);
 });
 test('host judgments are excluded from independent calibration statistics', () => {
   const r = review(); r.reviewer.origin = 'host'; r.reviewer.independent = false;
-  const result = summarizeCalibration([{ imageSha256: 'a'.repeat(64), role: 'relationship', label: 'rejected', origin: 'human', evidence: 'Explicit user rejection.' }], [r]);
+  const result = summarizeCalibration([{ imageSha256: 'a'.repeat(64), role: 'relationship', label: 'rejected', origin: 'human', evidence: 'Explicit user rejection.' }], [r], evaluation().packets);
   assert.equal(result.evaluatedHumanNegatives, 0); assert.equal(result.falseAcceptanceRate, null);
+});
+
+test('an overall winner unsupported by every comparison axis is held', () => {
+  const input = evaluation();
+  for (const r of input.reviews) {
+    const loser = r.overall === 'A' ? 'B' : 'A';
+    r.axes = { hierarchy: loser, space: loser, grouping: loser, typography: loser, roleFit: loser };
+  }
+  assert.equal(decide(input).action, 'hold');
+});
+
+test('omitting baseline reading evidence cannot promote a candidate', () => {
+  const input = evaluation();
+  for (const r of input.reviews) r.reading = r.reading.filter(answer => answer.side === r.overall);
+  assert.equal(decide(input).action, 'hold');
+});
+
+test('inadequate baseline reading does not conceal a readable candidate improvement', () => {
+  const input = evaluation();
+  for (const r of input.reviews) for (const answer of r.reading) {
+    if (answer.side !== r.overall) answer.answer = 'unknown';
+  }
+  assert.equal(decide(input).action, 'propose-for-human-review');
+});
+
+test('unassessed axes cannot support a recommendation', () => {
+  const input = evaluation(); const first = input.reviews[0]; assert.ok(first);
+  first.axes.space = 'uncertain';
+  assert.equal(decide(input).action, 'hold');
+});
+
+test('stale and duplicated review records cannot contaminate calibration counts', () => {
+  const input = evaluation(), first = input.reviews[0]; assert.ok(first);
+  const feedback = [{ imageSha256: 'b'.repeat(64), role: 'relationship', label: 'rejected' as const, origin: 'human' as const, evidence: 'Synthetic rejected specimen.' }];
+  first.images.A = 'f'.repeat(64);
+  const stale = summarizeCalibration(feedback, [first], input.packets);
+  assert.equal(stale.evaluatedHumanNegatives, 0); assert.equal(stale.excludedReviewRecords, 1);
+  const duplicates = summarizeCalibration(feedback, [review(), review()], input.packets);
+  assert.equal(duplicates.evaluatedHumanNegatives, 0); assert.equal(duplicates.excludedReviewRecords, 2);
 });

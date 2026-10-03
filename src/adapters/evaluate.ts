@@ -16,7 +16,7 @@ export async function evaluateSession(directory: string, reviewFiles: string[], 
   const result = { schemaVersion: 1, createdAt: new Date().toISOString(), candidateGate,
     baselineGate: checkSnapshot(session.baseline, session.contract),
     decision: decide({ ...session, candidateGate, reviews, attempt, maxAttempts }),
-    calibration: summarizeCalibration(feedback, reviews),
+    calibration: summarizeCalibration(feedback, reviews, session.packets),
     reviews, binding: { candidateImageSha256: session.candidate.imageSha256, baselineImageSha256: session.baseline.imageSha256, contractSha256: session.contractSha256, protocolSha256: session.protocolSha256 },
     attempt, maxAttempts
   };

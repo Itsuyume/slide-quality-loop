@@ -15,7 +15,7 @@ export function snapshot(letter = 'a'): Snapshot {
     ready: true, loadedFonts: true, background: '#ffffff', texts: [
       { name: 'people', text: 'Person One Person Two', x: 100, y: 100, w: 500, h: 80, size: 40, color: '#222222', visible: true },
       { name: 'parent-role', text: 'Parent', x: 100, y: 220, w: 200, h: 50, size: 32, color: '#222222', visible: true }
-    ], paints: [], outside: [], collisions: [], glyphsOutside: 0, visibilityCoverage: 'dom-v1' };
+    ], paints: [], outside: [], collisions: [], glyphsOutside: 0, visibilityCoverage: 'dom-v1', rasterAudit: { greenPixels: 0, opaquePixels: 1920 * 1080, totalPixels: 1920 * 1080 } };
 }
 
 export function packet(reverse = false): Packet {

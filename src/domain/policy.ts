@@ -1,6 +1,7 @@
 import { normalize } from './schema.js';
 import type { Contract, GateResult, Snapshot } from './schema.js';
 import type { Packet, Review } from './review.js';
+import { reviewBindingProblems } from './review-evidence.js';
 
 export type Decision = { action: 'reject' | 'hold' | 'retain-baseline' | 'repair' | 'propose-for-human-review' | 'stop-budget'; reasons: string[]; userAccepted: false; automaticTransferAllowed: false };
 export type EvaluationInput = { candidate: Snapshot; baseline: Snapshot; candidateGate: GateResult; contract: Contract; packets: Packet[]; reviews: Review[]; attempt: number; maxAttempts: number };
@@ -17,8 +18,7 @@ function matchingReviews(input: EvaluationInput): string[] {
     const packet = input.packets.find(p => p.packetId === review.packetId);
     if (!packet || seen.has(review.packetId)) { problems.push('Missing or duplicated packet review.'); continue; }
     seen.add(review.packetId);
-    if (review.images.A !== packet.images.A || review.images.B !== packet.images.B) problems.push('Review references stale or different images.');
-    if (!review.reviewer.independent || !review.reviewer.authorshipHidden || review.reviewer.origin === 'host') problems.push('Review is not independent and authorship-blind.');
+    problems.push(...reviewBindingProblems(review, input.packets));
   }
   problems.push(...packetProblems(input.packets));
   if (new Set(input.reviews.map(r => r.reviewer.id)).size !== 2) problems.push('Fresh reviewer identities are required for the two passes.');
@@ -41,11 +41,21 @@ function readingProblems(review: Review, side: 'A' | 'B', contract: Contract): s
   });
 }
 
+function comparisonProblems(review: Review, other: 'A' | 'B', contract: Contract): string[] {
+  if (contract.readingChecks.some(check => review.reading.filter(r => r.side === other && r.questionId === check.id).length !== 1)) return ['Baseline reading evidence is missing or duplicated.'];
+  const axes = Object.values(review.axes);
+  if (axes.includes('uncertain')) return ['A comparison axis is unassessed.'];
+  if ((review.overall === 'A' || review.overall === 'B') && !axes.includes(review.overall)) return ['Overall preference has no supporting comparison axis.'];
+  return [];
+}
+
 function candidateFailure(review: Review, side: 'A' | 'B', contract: Contract): Decision | null {
     if (review.overall === 'uncertain' || review.adequacy[side] === 'uncertain') return decision('hold', 'A judge abstained.');
     if (review.overall === 'both-bad' || review.adequacy[side] === 'inadequate') return decision('repair', 'Candidate has not met the role-specific adequacy floor.');
     const reading = readingProblems(review, side, contract);
     if (reading.length) return decision('repair', ...reading);
+    const comparison = comparisonProblems(review, side === 'A' ? 'B' : 'A', contract);
+    if (comparison.length) return decision('hold', ...comparison);
     if (!review.observations.some(o => o.side === side) || !review.observations.some(o => o.side !== side)) return decision('hold', 'Both images need grounded observations.');
     return null;
 }

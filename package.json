@@ -1,6 +1,6 @@
 {
   "name": "slide-quality-loop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Constrained, evidence-bound review loop for rendered presentation slides",
