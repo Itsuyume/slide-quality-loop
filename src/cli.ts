@@ -1,14 +1,32 @@
 import { parseArgs } from 'node:util';
 import { checkSnapshot } from './domain/checks.js';
 import { contractSchema } from './domain/schema.js';
-import { readChecked, writeNewJson } from './adapters/files.js';
+import { digest, readChecked, writeNewJson } from './adapters/files.js';
 import { loadSnapshot } from './adapters/snapshot.js';
 import { prepareSession } from './adapters/packets.js';
 import { evaluateSession } from './adapters/evaluate.js';
+import { analyzeComposition } from './domain/composition.js';
 
 function required(value: string | undefined, name: string): string {
   if (!value) throw new Error(`Missing --${name}.`);
   return value;
+}
+
+async function inspectSnapshot(command: 'gate' | 'diagnose', directory: string, contractFile: string, slide: number, output: string): Promise<void> {
+  const contract = await readChecked(contractFile, contractSchema);
+  const snapshot = await loadSnapshot(directory, slide, contract.role);
+  if (command === 'diagnose') {
+    const diagnostics = analyzeComposition(snapshot, contract);
+    await writeNewJson(output, { imageSha256: snapshot.imageSha256, measurementSha256: snapshot.measurementSha256,
+      contractSha256: digest(JSON.stringify(contract)), diagnostics });
+    console.log(JSON.stringify(diagnostics));
+    process.exitCode = diagnostics.status === 'measured' ? 0 : 3;
+    return;
+  }
+  const result = checkSnapshot(snapshot, contract);
+  await writeNewJson(output, { snapshot, result });
+  console.log(JSON.stringify(result));
+  process.exitCode = result.status === 'pass' ? 0 : result.status === 'fail' ? 2 : 3;
 }
 
 async function main(): Promise<void> {
@@ -21,13 +39,8 @@ async function main(): Promise<void> {
   }, strict: true });
   const slide = Number(values.slide);
   if (!Number.isSafeInteger(slide) || slide < 1) throw new Error('Invalid slide number.');
-  if (command === 'gate') {
-    const contract = await readChecked(required(values.contract, 'contract'), contractSchema);
-    const snapshot = await loadSnapshot(required(values.snapshot, 'snapshot'), slide, contract.role);
-    const result = checkSnapshot(snapshot, contract);
-    await writeNewJson(required(values.out, 'out'), { snapshot, result });
-    console.log(JSON.stringify(result));
-    process.exitCode = result.status === 'pass' ? 0 : result.status === 'fail' ? 2 : 3;
+  if (command === 'gate' || command === 'diagnose') {
+    await inspectSnapshot(command, required(values.snapshot, 'snapshot'), required(values.contract, 'contract'), slide, required(values.out, 'out'));
     return;
   }
   if (command === 'prepare') {
@@ -41,7 +54,7 @@ async function main(): Promise<void> {
     process.exitCode = result.decision.action === 'propose-for-human-review' ? 0 : 3;
     return;
   }
-  throw new Error('Commands: gate --snapshot DIR --contract FILE --out FILE; prepare --baseline DIR --candidate DIR --contract FILE --out NEW_DIR; evaluate --session DIR --review FILE --review FILE --feedback FILE --out NEW_FILE [--attempt 1 --budget 3].');
+  throw new Error('Commands: gate|diagnose --snapshot DIR --contract FILE --out FILE; prepare --baseline DIR --candidate DIR --contract FILE --out NEW_DIR; evaluate --session DIR --review FILE --review FILE --feedback FILE --out NEW_FILE [--attempt 1 --budget 3].');
 }
 
 main().catch((error: unknown) => {

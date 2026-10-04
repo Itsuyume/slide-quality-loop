@@ -10,6 +10,7 @@ import { packetSchema, reviewSchema } from '../domain/review.js';
 import type { Packet } from '../domain/review.js';
 import { digest, readChecked, writeNewJson } from './files.js';
 import { loadSnapshot } from './snapshot.js';
+import { analyzeComposition } from '../domain/composition.js';
 
 export const sessionSchema = z.object({
   contract: contractSchema, baseline: snapshotSchema, candidate: snapshotSchema,
@@ -25,7 +26,8 @@ function makePacket(contract: Contract, contractHash: string, a: Snapshot, b: Sn
   const pairId = digest([contractHash, protocolHash, ...[a.imageSha256, b.imageSha256].sort()].join(':'));
   return { packetId: digest(`${pairId}:${a.imageSha256}:${b.imageSha256}`), pairId, contractSha256: contractHash,
     protocolVersion: '1', role: contract.role, brief: contract.brief,
-    images: { A: a.imageSha256, B: b.imageSha256 }, questions: contract.readingChecks.map(q => ({ id: q.id, question: q.question })) };
+    images: { A: a.imageSha256, B: b.imageSha256 }, questions: contract.readingChecks.map(q => ({ id: q.id, question: q.question })),
+    ...(contract.reviewCriteria ? { criteria: contract.reviewCriteria } : {}) };
 }
 
 async function writePacket(directory: string, packet: Packet, a: string, b: string): Promise<void> {
@@ -50,6 +52,7 @@ export async function prepareSession(baselineDir: string, candidateDir: string, 
   await mkdir(output);
   await writeNewJson(path.join(output, 'session.private.json'), session);
   await writeNewJson(path.join(output, 'gates.json'), { baseline: checkSnapshot(baseline, contract), candidate: checkSnapshot(candidate, contract) });
+  await writeNewJson(path.join(output, 'composition.private.json'), { baseline: analyzeComposition(baseline, contract), candidate: analyzeComposition(candidate, contract) });
   const [first, second] = packets;
   if (!first || !second) throw new Error('Packet assembly failed.');
   await writePacket(path.join(output, 'pass-1'), first, sourceImages.baseline, sourceImages.candidate);

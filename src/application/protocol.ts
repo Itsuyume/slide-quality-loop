@@ -5,6 +5,12 @@ Judge hierarchy, proportional use of space, semantic grouping, typography, and f
 Color count, decoration, filled area, larger headings, and shorter text are not intrinsic rewards.
 Preserve enough content to support the argument. Prefer neither sparse nor dense layouts by default.
 Compare each axis, then give an overall preference. A relative winner can still be inadequate.
+When task.json lists criteria, assess EVERY criterion for BOTH images in assessments.
+Use satisfied, problem, or uncertain with a concrete rationale and normalized image region.
+Evaluate whether connector travel explains a relationship, not whether every line is short.
+Check that relation labels carry enough emphasis and that supporting pathways attach to their subject.
+Whitespace is purposeful when it clarifies structure; filling it is not an improvement by itself.
+Identify gains worth preserving as well as defects. Needs-revision does not imply no progress.
 An overall winner needs support from at least one axis. Mark unassessed axes uncertain.
 Use tie, both-bad, or uncertain when warranted. Never invent a probability or a human approval.
 Ground observations on both images with normalized [x,y,w,h] regions and concrete reading consequences.

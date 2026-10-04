@@ -6,6 +6,7 @@ import { feedbackSchema, reviewSchema } from '../domain/review.js';
 import { summarizeCalibration } from '../application/calibration.js';
 import { readChecked, writeNewJson } from './files.js';
 import { sessionSchema, verifySession } from './packets.js';
+import { analyzeComposition } from '../domain/composition.js';
 
 export async function evaluateSession(directory: string, reviewFiles: string[], feedbackFile: string, output: string, attempt: number, maxAttempts: number) {
   const session = await readChecked(path.join(directory, 'session.private.json'), sessionSchema);
@@ -17,6 +18,7 @@ export async function evaluateSession(directory: string, reviewFiles: string[], 
     baselineGate: checkSnapshot(session.baseline, session.contract),
     decision: decide({ ...session, candidateGate, reviews, attempt, maxAttempts }),
     calibration: summarizeCalibration(feedback, reviews, session.packets),
+    composition: { baseline: analyzeComposition(session.baseline, session.contract), candidate: analyzeComposition(session.candidate, session.contract) },
     reviews, binding: { candidateImageSha256: session.candidate.imageSha256, baselineImageSha256: session.baseline.imageSha256, contractSha256: session.contractSha256, protocolSha256: session.protocolSha256 },
     attempt, maxAttempts
   };

@@ -6,11 +6,14 @@ import { digest } from './files.js';
 import { boxSchema, snapshotSchema } from '../domain/schema.js';
 import type { Snapshot } from '../domain/schema.js';
 import { auditRaster } from '../domain/raster.js';
+import { unionBounds } from '../domain/geometry.js';
+import { readNativeRoute } from './native-routes.js';
 
-const measuredText = boxSchema.extend({ name: z.string(), text: z.string(), size: z.number(), color: z.string(), visible: z.boolean().optional() });
+const measuredText = boxSchema.extend({ name: z.string(), text: z.string(), size: z.number(), color: z.string(), visible: z.boolean().optional(),
+  glyphRects: z.array(boxSchema.extend({ character: z.string() })).optional() });
 const measuredSlide = z.object({ sourceSlide: z.number(), width: z.number(), height: z.number(), nodes: z.array(measuredText), outside: z.array(z.object({ name: z.string() })), collisions: z.array(z.object({ a: z.string(), b: z.string() })), glyphsOutside: z.array(z.unknown()) });
 const measurementSchema = z.object({ revision: z.string(), ready: z.boolean(), fonts: z.array(z.object({ status: z.string() })).min(1), slides: z.array(measuredSlide), visibilityVersion: z.literal('dom-v1').optional(), imageHashes: z.record(z.string()).optional() });
-const nativeNode = boxSchema.extend({ type: z.string(), fill: z.string().nullable().optional(), stroke: z.string().nullable().optional() });
+const nativeNode = boxSchema.extend({ type: z.string(), fill: z.string().nullable().optional(), stroke: z.string().nullable().optional() }).passthrough();
 const nativeSchema = z.object({ revision: z.string(), slides: z.array(z.object({ sourceSlide: z.number(), width: z.number(), height: z.number(), background: z.string(), nodes: z.array(nativeNode) })) });
 
 function rgbHex(value: string): string {
@@ -53,8 +56,10 @@ export async function loadSnapshot(directory: string, slideNumber: number, role:
   });
   return snapshotSchema.parse({ id: measured.revision, role, imageSha256: imageHash, measurementSha256: digest(measuredBytes), width: slide.width, height: slide.height,
     ready: measured.ready, loadedFonts: measured.fonts.every(f => f.status === 'loaded'), background: rgbHex(model.background),
-    texts: slide.nodes.map(n => ({ ...n, color: rgbHex(n.color), visible: n.visible ?? null })), paints,
+    texts: slide.nodes.map(n => ({ ...n, color: rgbHex(n.color), visible: n.visible ?? null,
+      contentBox: n.glyphRects ? unionBounds(n.glyphRects.filter(g => g.character.trim() && g.w > 0 && g.h > 0)) : null })), paints,
     outside: slide.outside.map(n => n.name), collisions: slide.collisions, glyphsOutside: slide.glyphsOutside.length,
-    visibilityCoverage: measured.visibilityVersion ?? 'legacy', rasterAudit: auditRaster(pixels, slide.width, slide.height)
+    visibilityCoverage: measured.visibilityVersion ?? 'legacy', rasterAudit: auditRaster(pixels, slide.width, slide.height),
+    routes: model.nodes.filter(node => node.type === 'VECTOR').map(readNativeRoute)
   });
 }

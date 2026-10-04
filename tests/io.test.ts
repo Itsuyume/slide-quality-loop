@@ -9,14 +9,16 @@ import { digest, writeNewJson } from '../src/adapters/files.js';
 import { prepareSession, verifySession } from '../src/adapters/packets.js';
 import { contract, snapshot } from './fixtures.js';
 
-async function makeCapture(directory: string, shade = 255): Promise<void> {
+async function makeCapture(directory: string, shade = 255, withGeometry = false): Promise<void> {
   await mkdir(directory);
   const source = snapshot();
   const png = new PNG({ width: 1920, height: 1080 }); png.data.fill(shade);
   const image = PNG.sync.write(png);
   const measurement = { revision: 'test', ready: true, fonts: [{ status: 'loaded' }], visibilityVersion: 'dom-v1', imageHashes: { '13': digest(image) },
-    slides: [{ sourceSlide: 13, width: 1920, height: 1080, nodes: source.texts, outside: [], collisions: [], glyphsOutside: [] }] };
-  const native = { revision: 'test', slides: [{ sourceSlide: 13, width: 1920, height: 1080, background: '#ffffff', nodes: [] }] };
+    slides: [{ sourceSlide: 13, width: 1920, height: 1080, nodes: source.texts.map(n => ({ ...n, ...(withGeometry ? { glyphRects: [
+      { character: 'A', x: n.x, y: n.y, w: 40, h: 50 }, { character: ' ', x: 0, y: 0, w: 1900, h: 50 }] } : {}) })), outside: [], collisions: [], glyphsOutside: [] }] };
+  const nodes = withGeometry ? [{ type: 'VECTOR', name: 'line', x: 10, y: 20, w: 30, h: 40, stroke: '#202326', vertices: [[0, 0, 'NONE'], [30, 40, 'NONE']], segments: [[0, 1]] }] : [];
+  const native = { revision: 'test', slides: [{ sourceSlide: 13, width: 1920, height: 1080, background: '#ffffff', nodes }] };
   await Promise.all([writeNewJson(path.join(directory, 'measurement.json'), measurement), writeNewJson(path.join(directory, 'native-model.json'), native), writeFile(path.join(directory, '13.png'), image)]);
 }
 
@@ -29,6 +31,13 @@ test('real files decode and image tampering or absence fails the boundary', asyn
   await assert.rejects(loadSnapshot(directory, 13, 'relationship'));
   await rm(path.join(directory, '13.png'));
   await assert.rejects(loadSnapshot(directory, 13, 'relationship'), /ENOENT/);
+});
+test('existing capture adapter preserves character bounds and vector geometry', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'slide-quality-')); t.after(() => rm(root, { recursive: true }));
+  const directory = path.join(root, 'capture'); await makeCapture(directory, 255, true);
+  const loaded = await loadSnapshot(directory, 13, 'relationship');
+  assert.deepEqual(loaded.texts[0]?.contentBox, { x: 100, y: 100, w: 40, h: 50 });
+  assert.deepEqual(loaded.routes?.[0]?.segments[0]?.end, { x: 40, y: 60 });
 });
 test('output writes cannot silently replace an existing receipt', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'slide-quality-')); t.after(() => rm(root, { recursive: true }));

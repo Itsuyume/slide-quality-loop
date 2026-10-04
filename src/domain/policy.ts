@@ -2,6 +2,7 @@ import { normalize } from './schema.js';
 import type { Contract, GateResult, Snapshot } from './schema.js';
 import type { Packet, Review } from './review.js';
 import { reviewBindingProblems } from './review-evidence.js';
+import { assessCriteriaPair } from './criteria.js';
 
 export type Decision = { action: 'reject' | 'hold' | 'retain-baseline' | 'repair' | 'propose-for-human-review' | 'stop-budget'; reasons: string[]; userAccepted: false; automaticTransferAllowed: false };
 export type EvaluationInput = { candidate: Snapshot; baseline: Snapshot; candidateGate: GateResult; contract: Contract; packets: Packet[]; reviews: Review[]; attempt: number; maxAttempts: number };
@@ -61,6 +62,9 @@ function candidateFailure(review: Review, side: 'A' | 'B', contract: Contract): 
 }
 
 function judgeDecision(input: EvaluationInput): Decision {
+  const criteria = assessCriteriaPair(input.reviews, input.candidate.imageSha256, input.contract);
+  if (criteria.unverified.length) return decision('hold', ...criteria.unverified);
+  if (criteria.repairs.length) return decision('repair', ...criteria.repairs);
   const wins: boolean[] = [];
   for (const review of input.reviews) {
     const side = review.images.A === input.candidate.imageSha256 ? 'A' : 'B';
